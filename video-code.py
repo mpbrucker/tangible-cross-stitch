@@ -40,23 +40,32 @@ while True:
         h, status = cv.findHomography(np.array(tag_corners), pts_dst)
         frame = cv.warpPerspective(frame, h, (648,484)) # img size is based on 4 px per stitch
         frame = frame[80:404, 80:568] # crop to just get working area
-        frame = cv.resize(frame, (122, 81), interpolation = cv.INTER_NEAREST) # downsample to 1 px/stitch
 
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
         ret, frame = cv.threshold(gray, 80, 255, cv.THRESH_BINARY)
+
+        # dilate to make it easier to detect the correct spots for the pattern
+        kernel = np.ones((1, 1), np.uint8)
+        frame = cv.dilate(frame, kernel)
+
+
+        frame = cv.resize(frame, (122, 81), interpolation=cv.INTER_NEAREST) # downsample to 1 px/stitch
+
+
         pattern_x, pattern_y = np.where(frame==0)
         if len(pattern_x) > 0:
             # print([min(pattern_x), max(pattern_x), min(pattern_y), max(pattern_y)]) 
             pattern_area = frame[min(pattern_x)-1:max(pattern_x)+1, min(pattern_y)-1:max(pattern_y)+1]
-            x_rep = int(frame.shape[0]/pattern_area.shape[0])+2
-            y_rep = int(frame.shape[1]/pattern_area.shape[1])+2
+            y_rep = int(frame.shape[0]/pattern_area.shape[0])+2
+            x_rep = int(frame.shape[1]/pattern_area.shape[1])+2
 
 
 
-            pattern_frame = np.tile(pattern_area, (x_rep,y_rep))
-            x_offset = pattern_area.shape[0]-(min(pattern_x)%pattern_area.shape[0])
-            y_offset = pattern_area.shape[1]-(min(pattern_y)%pattern_area.shape[1])
-            pattern_frame = pattern_frame[y_offset:y_offset+122,x_offset:x_offset+81]
+            pattern_frame = np.tile(pattern_area, (y_rep,x_rep))
+            y_offset = pattern_area.shape[0]-(min(pattern_y)%pattern_area.shape[0])
+            x_offset = pattern_area.shape[1]-(min(pattern_x)%pattern_area.shape[1])
+            print(x_offset, y_offset)
+            pattern_frame = pattern_frame[y_offset:y_offset+81,0:0+122]
 
             frame = pattern_frame      
 
@@ -69,28 +78,6 @@ while True:
             orig_frame = cv.bitwise_and(orig_frame, orig_frame, mask=frame)
 
 
-    # gray_blurred = cv.blur(gray, (5, 5))
-    # Display the resulting frame
-
-    # detected_circles = cv.HoughCircles(gray_blurred, 
-            #        cv.HOUGH_GRADIENT, 1, 50, param1 = 100,
-            #    param2 = 90, minRadius = 75, maxRadius = 200)
-  
-    # Draw circles that are detected.
-    # if detected_circles is not None:
-    
-    #     # Convert the circle parameters a, b and r to integers.
-    #     detected_circles = np.uint16(np.around(detected_circles))
-    
-    #     for pt in detected_circles[0, :]:
-    #         a, b, r = pt[0], pt[1], pt[2]
-
-    #         cv.putText(frame, "Hello World!", (a-75, b), cv.FONT_HERSHEY_SIMPLEX, 1, (0,250,0,255), 3)
-            # Draw the circumference of the circle.
-            # cv.circle(frame, (a, b), r, (0, 255, 0), 2)
-    
-            # # Draw a small circle (of radius 1) to show the center.
-            # cv.circle(frame, (a, b), 1, (0, 0, 255), 3)
     cv.imshow("Detected Circle", orig_frame)
     # cv.waitKey(0)
     # cv.imshow('frame', frame)
