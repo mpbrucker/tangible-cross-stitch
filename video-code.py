@@ -1,6 +1,6 @@
 import numpy as np
 import cv2 as cv
-cap = cv.VideoCapture(0)
+cap = cv.VideoCapture(1)
 if not cap.isOpened():
     print("Cannot open camera")
     exit()
@@ -11,6 +11,7 @@ while True:
     # Capture frame-by-frame
     ret, orig_frame = cap.read()
     frame = orig_frame
+    print(orig_frame.shape)
     # if frame is read correctly ret is True
     if not ret:
         print("Can't receive frame (stream end?). Exiting ...")
@@ -47,9 +48,16 @@ while True:
         if len(pattern_x) > 0:
             # print([min(pattern_x), max(pattern_x), min(pattern_y), max(pattern_y)]) 
             pattern_area = frame[min(pattern_x)-1:max(pattern_x)+1, min(pattern_y)-1:max(pattern_y)+1]
-            x_rep = int(frame.shape[0]/pattern_area.shape[0])
-            y_rep = int(frame.shape[1]/pattern_area.shape[1])
+            x_rep = int(frame.shape[0]/pattern_area.shape[0])+2
+            y_rep = int(frame.shape[1]/pattern_area.shape[1])+2
+
+
+
             pattern_frame = np.tile(pattern_area, (x_rep,y_rep))
+            x_offset = pattern_area.shape[0]-(min(pattern_x)%pattern_area.shape[0])
+            y_offset = pattern_area.shape[1]-(min(pattern_y)%pattern_area.shape[1])
+            pattern_frame = pattern_frame[y_offset:y_offset+122,x_offset:x_offset+81]
+
             frame = pattern_frame      
 
             # print(np.where(frame==0))
@@ -57,7 +65,7 @@ while True:
             frame = cv.resize(frame, (0,0), fx=4, fy=4, interpolation=cv.INTER_NEAREST)
             frame = cv.copyMakeBorder(frame, 80, 80, 400-frame.shape[0], 560-frame.shape[1], cv.BORDER_CONSTANT, value=255)
             h_inverse = np.linalg.inv(h)
-            frame = cv.warpPerspective(frame, h_inverse, (640, 480))
+            frame = cv.warpPerspective(frame, h_inverse, (1280, 720))
             orig_frame = cv.bitwise_and(orig_frame, orig_frame, mask=frame)
 
 
