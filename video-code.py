@@ -28,6 +28,28 @@ def transform_work_area(frame, padding):
     frame = frame[padding:-padding, padding:-padding] # crop to just get working area
     return h, frame
 
+def get_patterned_frame(frame):
+    pattern_x, pattern_y = np.where(frame==0)
+    if len(pattern_x) > 0:
+        pattern_area = frame[min(pattern_x)-1:max(pattern_x)+1, min(pattern_y)-1:max(pattern_y)+1]
+        y_rep = int(frame.shape[0]/pattern_area.shape[0])+2
+        x_rep = int(frame.shape[1]/pattern_area.shape[1])+2
+
+        pattern_frame = np.tile(pattern_area, (y_rep,x_rep))
+        y_offset = pattern_area.shape[0]-(min(pattern_y)%pattern_area.shape[0])
+        x_offset = pattern_area.shape[1]-(min(pattern_x)%pattern_area.shape[1])
+        # print(x_offset, y_offset)
+        pattern_frame = pattern_frame[y_offset:y_offset+81,0:0+122]
+
+        frame = pattern_frame      
+
+        # print(np.where(frame==0))
+        
+        frame = cv.resize(frame, (0,0), fx=4, fy=4, interpolation=cv.INTER_NEAREST)
+        frame = cv.copyMakeBorder(frame, 80, 80, 400-frame.shape[0], 560-frame.shape[1], cv.BORDER_CONSTANT, value=255)
+        return frame
+    return None
+
 while True:
     # Capture frame-by-frame
     ret, orig_frame = cap.read()
@@ -37,8 +59,7 @@ while True:
         print("Can't receive frame (stream end?). Exiting ...")
         break
     # Our operations on the frame come here
-    gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-    (corners, ids, rejected) = cv.aruco.detectMarkers(gray, aruco_dict,
+    (corners, ids, rejected) = cv.aruco.detectMarkers(frame, aruco_dict,
 	parameters=aruco_params)
     if ids is not None and ids.shape[0] > 0:
         ids = ids.flatten()
@@ -46,42 +67,21 @@ while True:
         if np.count_nonzero(tag_corners) < 8: # don't start tracking until we've seen all four corners
             continue
         
-        h_mat, frame = transform_work_area(frame, 80)
-
-        gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-        ret, frame = cv.threshold(gray, 80, 255, cv.THRESH_BINARY)
+        # Transform and threshold work area
+        h_mat, work_frame = transform_work_area(frame, 80)
+        gray = cv.cvtColor(work_frame, cv.COLOR_BGR2GRAY)
+        ret, thresh = cv.threshold(gray, 80, 255, cv.THRESH_BINARY)
 
         # dilate to make it easier to detect the correct spots for the pattern
         kernel = np.ones((1, 1), np.uint8)
-        frame = cv.dilate(frame, kernel)
+        thresh_dilated = cv.dilate(thresh, kernel)
+        work_resized = cv.resize(frame, (int(FRAME_SIZE[0]/4), int(FRAME_SIZE[1]/4)), interpolation=cv.INTER_NEAREST) # downsample to 1 px/stitch
 
-
-        frame = cv.resize(frame, (122, 81), interpolation=cv.INTER_NEAREST) # downsample to 1 px/stitch
-
-
-        pattern_x, pattern_y = np.where(frame==0)
-        if len(pattern_x) > 0:
-            pattern_area = frame[min(pattern_x)-1:max(pattern_x)+1, min(pattern_y)-1:max(pattern_y)+1]
-            y_rep = int(frame.shape[0]/pattern_area.shape[0])+2
-            x_rep = int(frame.shape[1]/pattern_area.shape[1])+2
-
-
-
-            pattern_frame = np.tile(pattern_area, (y_rep,x_rep))
-            y_offset = pattern_area.shape[0]-(min(pattern_y)%pattern_area.shape[0])
-            x_offset = pattern_area.shape[1]-(min(pattern_x)%pattern_area.shape[1])
-            # print(x_offset, y_offset)
-            pattern_frame = pattern_frame[y_offset:y_offset+81,0:0+122]
-
-            frame = pattern_frame      
-
-            # print(np.where(frame==0))
-            
-            frame = cv.resize(frame, (0,0), fx=4, fy=4, interpolation=cv.INTER_NEAREST)
-            frame = cv.copyMakeBorder(frame, 80, 80, 400-frame.shape[0], 560-frame.shape[1], cv.BORDER_CONSTANT, value=255)
+        pattern_frame = get_patterned_frame(work_resized)
+        if pattern_frame is not None:
             h_inverse = np.linalg.inv(h_mat)
-            frame = cv.warpPerspective(frame, h_inverse, (1280, 720))
-            orig_frame = cv.bitwise_and(orig_frame, orig_frame, mask=frame)
+            frame = cv.warpPerspective(pattern_frame, h_inverse, (1280, 720))
+            orig_frame = cv.bitwise_and(orig_frame, orig_frame, mask=pattern_frame)
 
 
     cv.imshow("Detected Circle", orig_frame)
