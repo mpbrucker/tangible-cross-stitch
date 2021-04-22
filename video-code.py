@@ -9,23 +9,29 @@ aruco_dict = cv.aruco.Dictionary_get(cv.aruco.DICT_7X7_50)
 aruco_params = cv.aruco.DetectorParameters_create()
 
 tag_corners = np.zeros((4,2))
+CORNER_POS_LIST = [[24,24],[624,24],[624,460],[24,460]] # The positions of the AR tag outer corners in transformed space
+FRAME_SIZE = (648,484)
 
-def update_homography(corners, ids):
+# Updates the corner entries in the list of points for the homography matrix
+def update_corners(corners, ids):
     for (corner, id) in zip(corners, ids):
         corners_list = corner.reshape((4,2))
-        (top_left, top_right, bottom_right, bottom_left) = corners_list
 
         # extract the correct outer corner based on ARuco index
         tag_corners[id-44] = corners_list[id-44]
 
-    
-
+# Transforms and crops the frame to the cross-stitch work area
+def transform_work_area(frame, padding):
+    pts_dst = np.array(CORNER_POS_LIST)
+    h, status = cv.findHomography(tag_corners, pts_dst)
+    frame = cv.warpPerspective(frame, h, FRAME_SIZE) # img size is based on 4 px per stitch
+    frame = frame[padding:-padding, padding:-padding] # crop to just get working area
+    return h, frame
 
 while True:
     # Capture frame-by-frame
     ret, orig_frame = cap.read()
     frame = orig_frame
-    print(orig_frame.shape)
     # if frame is read correctly ret is True
     if not ret:
         print("Can't receive frame (stream end?). Exiting ...")
@@ -34,18 +40,13 @@ while True:
     gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
     (corners, ids, rejected) = cv.aruco.detectMarkers(gray, aruco_dict,
 	parameters=aruco_params)
-    if ids is not None and ids.shape[0] > 0: # TODO change to ids.shape[0] > 0 
+    if ids is not None and ids.shape[0] > 0:
         ids = ids.flatten()
-        update_homography(corners, ids)
+        update_corners(corners, ids)
         if np.count_nonzero(tag_corners) < 8: # don't start tracking until we've seen all four corners
             continue
         
-        # pts_dst = np.array([[0,0], [200,0], [200,200], [0, 200]])
-        # pts_dst = np.array([[24,24],[60,24],[60,60],[24,60]])
-        pts_dst = np.array([[24,24],[624,24],[624,460],[24,460]])
-        h, status = cv.findHomography(tag_corners, pts_dst)
-        frame = cv.warpPerspective(frame, h, (648,484)) # img size is based on 4 px per stitch
-        frame = frame[80:404, 80:568] # crop to just get working area
+        h_mat, frame = transform_work_area(frame, 80)
 
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
         ret, frame = cv.threshold(gray, 80, 255, cv.THRESH_BINARY)
@@ -78,7 +79,7 @@ while True:
             
             frame = cv.resize(frame, (0,0), fx=4, fy=4, interpolation=cv.INTER_NEAREST)
             frame = cv.copyMakeBorder(frame, 80, 80, 400-frame.shape[0], 560-frame.shape[1], cv.BORDER_CONSTANT, value=255)
-            h_inverse = np.linalg.inv(h)
+            h_inverse = np.linalg.inv(h_mat)
             frame = cv.warpPerspective(frame, h_inverse, (1280, 720))
             orig_frame = cv.bitwise_and(orig_frame, orig_frame, mask=frame)
 
