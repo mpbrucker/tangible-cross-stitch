@@ -7,6 +7,8 @@ if not cap.isOpened():
 
 aruco_dict = cv.aruco.Dictionary_get(cv.aruco.DICT_7X7_50)
 aruco_params = cv.aruco.DetectorParameters_create()
+
+
 while True:
     # Capture frame-by-frame
     ret, orig_frame = cap.read()
@@ -21,7 +23,7 @@ while True:
     (corners, ids, rejected) = cv.aruco.detectMarkers(gray, aruco_dict,
 	parameters=aruco_params)
     tag_corners = np.zeros((4,2))
-    if ids is not None and ids.shape[0] == 4:
+    if ids is not None and ids.shape[0] == 4: # TODO change to ids.shape[0] > 0 
         ids = ids.flatten()
         for (corner, id) in zip(corners, ids):
             corners_list = corner.reshape((4,2))
@@ -54,7 +56,6 @@ while True:
 
         pattern_x, pattern_y = np.where(frame==0)
         if len(pattern_x) > 0:
-            # print([min(pattern_x), max(pattern_x), min(pattern_y), max(pattern_y)]) 
             pattern_area = frame[min(pattern_x)-1:max(pattern_x)+1, min(pattern_y)-1:max(pattern_y)+1]
             y_rep = int(frame.shape[0]/pattern_area.shape[0])+2
             x_rep = int(frame.shape[1]/pattern_area.shape[1])+2
@@ -64,7 +65,7 @@ while True:
             pattern_frame = np.tile(pattern_area, (y_rep,x_rep))
             y_offset = pattern_area.shape[0]-(min(pattern_y)%pattern_area.shape[0])
             x_offset = pattern_area.shape[1]-(min(pattern_x)%pattern_area.shape[1])
-            print(x_offset, y_offset)
+            # print(x_offset, y_offset)
             pattern_frame = pattern_frame[y_offset:y_offset+81,0:0+122]
 
             frame = pattern_frame      
