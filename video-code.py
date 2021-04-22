@@ -8,6 +8,18 @@ if not cap.isOpened():
 aruco_dict = cv.aruco.Dictionary_get(cv.aruco.DICT_7X7_50)
 aruco_params = cv.aruco.DetectorParameters_create()
 
+tag_corners = np.zeros((4,2))
+
+def update_homography(corners, ids):
+    for (corner, id) in zip(corners, ids):
+        corners_list = corner.reshape((4,2))
+        (top_left, top_right, bottom_right, bottom_left) = corners_list
+
+        # extract the correct outer corner based on ARuco index
+        tag_corners[id-44] = corners_list[id-44]
+
+    
+
 
 while True:
     # Capture frame-by-frame
@@ -22,24 +34,16 @@ while True:
     gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
     (corners, ids, rejected) = cv.aruco.detectMarkers(gray, aruco_dict,
 	parameters=aruco_params)
-    tag_corners = np.zeros((4,2))
-    if ids is not None and ids.shape[0] == 4: # TODO change to ids.shape[0] > 0 
+    if ids is not None and ids.shape[0] > 0: # TODO change to ids.shape[0] > 0 
         ids = ids.flatten()
-        for (corner, id) in zip(corners, ids):
-            corners_list = corner.reshape((4,2))
-            (top_left, top_right, bottom_right, bottom_left) = corners_list
-
-            # extract the correct outer corner based on ARuco index
-            tag_corners[id-44] = corners_list[id-44]
-
-            # cv.line(frame, tuple(top_left), tuple(top_right), (0, 255, 0), 2)
-            # cv.line(frame, tuple(top_right), tuple(bottom_right), (0, 255, 0), 2)
-            # cv.line(frame, tuple(bottom_right), tuple(bottom_left), (0, 255, 0), 2)
-            # cv.line(frame, tuple(bottom_left), tuple(top_left), (0, 255, 0), 2)
+        update_homography(corners, ids)
+        if np.count_nonzero(tag_corners) < 8: # don't start tracking until we've seen all four corners
+            continue
+        
+        # pts_dst = np.array([[0,0], [200,0], [200,200], [0, 200]])
         # pts_dst = np.array([[24,24],[60,24],[60,60],[24,60]])
         pts_dst = np.array([[24,24],[624,24],[624,460],[24,460]])
-        # pts_dst = np.array([[0,0], [200,0], [200,200], [0, 200]])
-        h, status = cv.findHomography(np.array(tag_corners), pts_dst)
+        h, status = cv.findHomography(tag_corners, pts_dst)
         frame = cv.warpPerspective(frame, h, (648,484)) # img size is based on 4 px per stitch
         frame = frame[80:404, 80:568] # crop to just get working area
 
