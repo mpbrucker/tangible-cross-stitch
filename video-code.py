@@ -96,7 +96,7 @@ while True:
 
         if pattern_frame is not None:
             h_inverse = np.linalg.inv(h_mat)
-            pattern_frame_orig = cv.warpPerspective(pattern_frame, h_inverse, (1280, 720))
+            pattern_frame_orig = cv.warpPerspective(pattern_frame, h_inverse, (1280, 720), borderMode = cv.BORDER_CONSTANT, borderValue=255)
             orig_frame = cv.bitwise_and(orig_frame, orig_frame, mask=pattern_frame_orig)
         
         frames_gone = 0
