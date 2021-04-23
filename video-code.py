@@ -17,6 +17,7 @@ FRAMES_GONE_THRESHOLD = 5
 frames_gone = FRAMES_GONE_THRESHOLD
 work_frames_recorded = 0
 pattern_found = False
+pattern_frame = None
 stitch_pattern = np.zeros((81, 122))
 
 # Updates the corner entries in the list of points for the homography matrix
@@ -82,17 +83,17 @@ while True:
         thresh_dilated = cv.dilate(thresh, kernel)
         # print(thresh_dilated.shape)
         work_resized = cv.resize(thresh_dilated, (122, 81), interpolation=cv.INTER_NEAREST) # downsample to 1 px/stitch
-        if work_frames_recorded < 50:
+        if work_frames_recorded < 30:
             stitch_pattern = np.add(stitch_pattern, work_resized)
             work_frames_recorded += 1
         elif pattern_found == False:
-            stitch_pattern = np.round(stitch_pattern/(50*255))*255
-            print(np.where(stitch_pattern < 255))
-            cv.imshow("Stitch pattenr", stitch_pattern)
+            stitch_pattern = np.round(stitch_pattern/(30*255))*255
+            cv.imshow("Stitch pattern", cv.resize(stitch_pattern, (0,0), fx=8, fy=8, interpolation=cv.INTER_NEAREST))
             pattern_found = True
+            pattern_frame = get_patterned_frame(work_resized)
+
         # print(work_resized.shape)
 
-        pattern_frame = get_patterned_frame(work_resized)
         if pattern_frame is not None:
             h_inverse = np.linalg.inv(h_mat)
             pattern_frame_orig = cv.warpPerspective(pattern_frame, h_inverse, (1280, 720))
