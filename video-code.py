@@ -11,6 +11,13 @@ aruco_params = cv.aruco.DetectorParameters_create()
 tag_corners = np.zeros((4,2))
 CORNER_POS_LIST = [[24,24],[624,24],[624,460],[24,460]] # The positions of the AR tag outer corners in transformed space
 FRAME_SIZE = (648,484)
+FRAMES_GONE_THRESHOLD = 5
+
+# Track whether the AR tags have been gone for several frames, so brief loss of tags doesn't cause issues
+frames_gone = FRAMES_GONE_THRESHOLD
+work_frames_recorded = 0
+pattern_found = False
+stitch_pattern = np.zeros((81, 122))
 
 # Updates the corner entries in the list of points for the homography matrix
 def update_corners(corners, ids):
@@ -45,7 +52,6 @@ def get_patterned_frame(frame):
         
         frame_orig_size = cv.resize(pattern_frame, (0,0), fx=4, fy=4, interpolation=cv.INTER_NEAREST)
         frame_bordered = cv.copyMakeBorder(frame_orig_size, 80, 80, 80, 80, cv.BORDER_CONSTANT, value=255)
-        print(frame_bordered.shape)
         return frame_bordered
     return None
 
@@ -74,16 +80,30 @@ while True:
         # dilate to make it easier to detect the correct spots for the pattern
         kernel = np.ones((1, 1), np.uint8)
         thresh_dilated = cv.dilate(thresh, kernel)
-        print(thresh_dilated.shape)
+        # print(thresh_dilated.shape)
         work_resized = cv.resize(thresh_dilated, (122, 81), interpolation=cv.INTER_NEAREST) # downsample to 1 px/stitch
-        print(work_resized.shape)
+        if work_frames_recorded < 50:
+            stitch_pattern = np.add(stitch_pattern, work_resized)
+            work_frames_recorded += 1
+        elif pattern_found == False:
+            stitch_pattern = np.round(stitch_pattern/(50*255))*255
+            print(np.where(stitch_pattern < 255))
+            cv.imshow("Stitch pattenr", stitch_pattern)
+            pattern_found = True
+        # print(work_resized.shape)
 
         pattern_frame = get_patterned_frame(work_resized)
         if pattern_frame is not None:
             h_inverse = np.linalg.inv(h_mat)
             pattern_frame_orig = cv.warpPerspective(pattern_frame, h_inverse, (1280, 720))
             orig_frame = cv.bitwise_and(orig_frame, orig_frame, mask=pattern_frame_orig)
-
+        
+        frames_gone = 0
+    else:
+        frames_gone += 1
+        if frames_gone >= FRAMES_GONE_THRESHOLD: # If we've lost the work piece for a long enough time
+            pattern_found = False
+            work_frames_recorded = 0
 
     cv.imshow("Detected Circle", orig_frame)
     # cv.waitKey(0)
