@@ -1,12 +1,13 @@
 import numpy as np
 import cv2 as cv
-cap = cv.VideoCapture(1)
+cap = cv.VideoCapture(0)
 if not cap.isOpened():
     print("Cannot open camera")
     exit()
 
 calibration_pattern = cv.imread('aruco-calibrator.png', 0)
-PROJ_CORNER_POS = [[50,50],[1870,50],[1030,1870],[50,1030]]
+
+PROJ_CORNER_POS = [[50,50],[1870,50],[1870,1030],[50,1030]]
 proj_corners = np.zeros((4,2))
 
 aruco_dict = cv.aruco.Dictionary_get(cv.aruco.DICT_7X7_50)
@@ -79,36 +80,47 @@ while True:
         ids = ids.flatten()
         print(ids)
         update_corners(corners, ids)
-        if np.count_nonzero(tag_corners) < 8 or np.count_nonzero (proj_corners) < 8: # don't start tracking until we've seen all four corners
-            continue
         
-        # Transform and threshold work area
-        h_mat, work_frame = transform_work_area(frame, 80)
-        gray = cv.cvtColor(work_frame, cv.COLOR_BGR2GRAY)
-        ret, thresh = cv.threshold(gray, 80, 255, cv.THRESH_BINARY)
+        # # Detect calibration corners and perform perspective transform
+        if np.count_nonzero(proj_corners) == 8:
+            pts_dst = np.array(PROJ_CORNER_POS)
+            print(proj_corners)
+            print(pts_dst)
+            h_proj, status = cv.findHomography(proj_corners, pts_dst)
+            frame_proj = cv.warpPerspective(frame, h_proj, (1920, 1080)) # img size is based on 4 px per stitch
+            cv.imshow("proj", frame_proj)
 
-        # dilate to make it easier to detect the correct spots for the pattern
-        kernel = np.ones((1, 1), np.uint8)
-        thresh_dilated = cv.dilate(thresh, kernel)
-        # print(thresh_dilated.shape)
-        work_resized = cv.resize(thresh_dilated, (122, 81), interpolation=cv.INTER_NEAREST) # downsample to 1 px/stitch
-        if work_frames_recorded < 30:
-            stitch_pattern = np.add(stitch_pattern, work_resized)
-            work_frames_recorded += 1
-        elif pattern_found == False:
-            stitch_pattern = np.round(stitch_pattern/(30*255))*255
-            cv.imshow("Stitch pattern", cv.resize(stitch_pattern, (0,0), fx=8, fy=8, interpolation=cv.INTER_NEAREST))
-            pattern_found = True
-            pattern_frame = get_patterned_frame(work_resized)
+        # if np.count_nonzero(tag_corners) < 8: # don't start tracking until we've seen all four corners
+        #     print("hello?")
+        #     continue
 
-        # print(work_resized.shape)
+        # # Transform and threshold work area
+        # h_mat, work_frame = transform_work_area(frame, 80)
+        # gray = cv.cvtColor(work_frame, cv.COLOR_BGR2GRAY)
+        # ret, thresh = cv.threshold(gray, 80, 255, cv.THRESH_BINARY)
 
-        if pattern_frame is not None:
-            h_inverse = np.linalg.inv(h_mat)
-            pattern_frame_orig = cv.warpPerspective(pattern_frame, h_inverse, (1280, 720), borderMode = cv.BORDER_CONSTANT, borderValue=255)
-            orig_frame = cv.bitwise_and(orig_frame, orig_frame, mask=pattern_frame_orig)
+        # # dilate to make it easier to detect the correct spots for the pattern
+        # kernel = np.ones((1, 1), np.uint8)
+        # thresh_dilated = cv.dilate(thresh, kernel)
+        # # print(thresh_dilated.shape)
+        # work_resized = cv.resize(thresh_dilated, (122, 81), interpolation=cv.INTER_NEAREST) # downsample to 1 px/stitch
+        # if work_frames_recorded < 30:
+        #     stitch_pattern = np.add(stitch_pattern, work_resized)
+        #     work_frames_recorded += 1
+        # elif pattern_found == False:
+        #     stitch_pattern = np.round(stitch_pattern/(30*255))*255
+        #     cv.imshow("Stitch pattern", cv.resize(stitch_pattern, (0,0), fx=8, fy=8, interpolation=cv.INTER_NEAREST))
+        #     pattern_found = True
+        #     pattern_frame = get_patterned_frame(work_resized)
+
+        # # print(work_resized.shape)
+
+        # if pattern_frame is not None:
+        #     h_inverse = np.linalg.inv(h_mat)
+        #     pattern_frame_orig = cv.warpPerspective(pattern_frame, h_inverse, (1920, 1080), borderMode = cv.BORDER_CONSTANT, borderValue=255)
+        #     orig_frame = cv.bitwise_and(calibration_pattern, calibration_pattern, mask=pattern_frame_orig)
         
-        frames_gone = 0
+        # frames_gone = 0
     else:
         frames_gone += 1
         if frames_gone >= FRAMES_GONE_THRESHOLD: # If we've lost the work piece for a long enough time
@@ -116,6 +128,7 @@ while True:
             work_frames_recorded = 0
 
     cv.imshow("Detected Circle", orig_frame)
+    cv.imshow('Calibration', calibration_pattern)
     # cv.waitKey(0)
     # cv.imshow('frame', frame)
     if cv.waitKey(1) == ord('q'):
