@@ -5,13 +5,17 @@ if not cap.isOpened():
     print("Cannot open camera")
     exit()
 
+calibration_pattern = cv.imread('aruco-calibrator.png', 0)
+PROJ_CORNER_POS = [[50,50],[1870,50],[1030,1870],[50,1030]]
+proj_corners = np.zeros((4,2))
+
 aruco_dict = cv.aruco.Dictionary_get(cv.aruco.DICT_7X7_50)
 aruco_params = cv.aruco.DetectorParameters_create()
 
 tag_corners = np.zeros((4,2))
 CORNER_POS_LIST = [[24,24],[624,24],[624,460],[24,460]] # The positions of the AR tag outer corners in transformed space
 FRAME_SIZE = (648,484)
-FRAMES_GONE_THRESHOLD = 5
+FRAMES_GONE_THRESHOLD = 30
 
 # Track whether the AR tags have been gone for several frames, so brief loss of tags doesn't cause issues
 frames_gone = FRAMES_GONE_THRESHOLD
@@ -25,8 +29,12 @@ def update_corners(corners, ids):
     for (corner, id) in zip(corners, ids):
         corners_list = corner.reshape((4,2))
 
-        # extract the correct outer corner based on ARuco index
-        tag_corners[id-44] = corners_list[id-44]
+        # We have two sets of AR tags, one for the projector alignment and one for the actual piece
+        if id < 15:
+            proj_corners[id-11] = corners_list[id-11]
+        else:
+            # extract the correct outer corner based on ARuco index
+            tag_corners[id-44] = corners_list[id-44]
 
 # Transforms and crops the frame to the cross-stitch work area
 def transform_work_area(frame, padding):
@@ -69,8 +77,9 @@ while True:
 	parameters=aruco_params)
     if ids is not None and ids.shape[0] > 0:
         ids = ids.flatten()
+        print(ids)
         update_corners(corners, ids)
-        if np.count_nonzero(tag_corners) < 8: # don't start tracking until we've seen all four corners
+        if np.count_nonzero(tag_corners) < 8 or np.count_nonzero (proj_corners) < 8: # don't start tracking until we've seen all four corners
             continue
         
         # Transform and threshold work area
