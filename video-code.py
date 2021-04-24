@@ -5,7 +5,7 @@ if not cap.isOpened():
     print("Cannot open camera")
     exit()
 
-calibration_pattern = cv.imread('aruco-calibrator.png', 0)
+calibration_pattern_file = cv.imread('aruco-calibrator.png', 0)
 
 PROJ_CORNER_POS = [[25,25],[935,25],[935,515],[25,515]]
 proj_corners = np.zeros((4,2))
@@ -66,6 +66,7 @@ def get_patterned_frame(frame):
     return None
 
 while True:
+    calibration_pattern = calibration_pattern_file
     # Capture frame-by-frame
     ret, orig_frame = cap.read()
     frame = orig_frame
@@ -77,7 +78,9 @@ while True:
     (corners, ids, rejected) = cv.aruco.detectMarkers(frame, aruco_dict,
 	parameters=aruco_params)
     if ids is not None and ids.shape[0] > 0:
+
         ids = ids.flatten()
+        print(ids)
         update_corners(corners, ids)
         
         # # Detect calibration corners and perform perspective transform
@@ -85,11 +88,11 @@ while True:
             pts_dst = np.array(PROJ_CORNER_POS)
             h_proj, status = cv.findHomography(proj_corners, pts_dst)
             frame_proj = cv.warpPerspective(frame, h_proj, (960, 540)) # img size is based on 4 px per stitch
+            cv.imshow("calib", frame_proj)
 
         if np.count_nonzero(tag_corners) == 8: # don't start tracking until we've seen all four corners
                         # Transform and threshold work area
-            print("test")
-            h_mat, work_frame = transform_work_area(frame, 80)
+            h_mat, work_frame = transform_work_area(frame_proj, 80)
             gray = cv.cvtColor(work_frame, cv.COLOR_BGR2GRAY)
             ret, thresh = cv.threshold(gray, 80, 255, cv.THRESH_BINARY)
 
@@ -110,8 +113,8 @@ while True:
 
             if pattern_frame is not None:
                 h_inverse = np.linalg.inv(h_mat)
-                pattern_frame_orig = cv.warpPerspective(pattern_frame, h_inverse, (960, 540), borderMode = cv.BORDER_CONSTANT, borderValue=255)
-                orig_frame = cv.bitwise_and(calibration_pattern, calibration_pattern, mask=pattern_frame_orig)
+                pattern_frame_orig = cv.warpPerspective(pattern_frame, h_inverse, (1920, 1080), borderMode = cv.BORDER_CONSTANT, borderValue=255)
+                calibration_pattern = cv.bitwise_and(calibration_pattern, calibration_pattern, mask=pattern_frame_orig)
             
             frames_gone = 0
     else:
